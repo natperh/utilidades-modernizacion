@@ -1,0 +1,21 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.11
+    commands:
+      - echo "Instalando dependencias de AWS..."
+      - pip install boto3
+
+  build:
+    commands:
+      - echo "Iniciando proceso de modernización centralizado..."
+      # CODEBUILD_SRC_DIR es la carpeta del repo de Cobol (el principal)
+      # CODEBUILD_SRC_DIR_herramientas es la carpeta del repo de utilidades
+      - python $CODEBUILD_SRC_DIR_herramientas/transformar.py
+
+  post_build:
+    commands:
+      - echo "Verificando si se generó el archivo de resultados..."
+      - ls -l $CODEBUILD_SRC_DIR/resultado_modernizacion.md
