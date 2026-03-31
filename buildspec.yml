@@ -1,21 +1,36 @@
 version: 0.2
 
+env:
+  # Aquí mapeamos tu secreto de AWS a una variable que Git pueda usar
+  secrets-manager:
+    GITHUB_TOKEN: "prod/github/modernizer:token" 
+
 phases:
   install:
     runtime-versions:
       python: 3.11
     commands:
-      - echo "Instalando dependencias de AWS..."
       - pip install boto3
-
   build:
     commands:
-      - echo "Iniciando proceso de modernización centralizado..."
-      # CODEBUILD_SRC_DIR es la carpeta del repo de Cobol (el principal)
-      # CODEBUILD_SRC_DIR_herramientas es la carpeta del repo de utilidades
+      - echo "Transformando COBOL a Java con Cohere..."
       - python $CODEBUILD_SRC_DIR_herramientas/transformar.py
-
   post_build:
     commands:
-      - echo "Verificando si se generó el archivo de resultados..."
-      - ls -l $CODEBUILD_SRC_DIR/resultado_modernizacion.md
+      - echo "Configurando Git para subir resultados..."
+      - git config --global user.email "modernizer-bot@ejemplo.com"
+      - git config --global user.name "Modernizer Bot"
+      
+      # 1. Agregamos los archivos .md generados
+      - git add *.md
+      
+      # 2. Verificamos si hay cambios reales para no fallar si no hay nada nuevo
+      - |
+        if git status --porcelain | grep .md; then
+          git commit -m "docs: modernización automática de COBOL [skip ci]"
+          # 3. Empujamos los cambios usando el token del secreto
+          git push https://${GITHUB_TOKEN}@github.com/natperh/codigosCobol.git HEAD:main
+          echo "✅ Resultados subidos exitosamente a GitHub."
+        else
+          echo "No se generaron cambios nuevos."
+        fi
