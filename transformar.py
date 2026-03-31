@@ -50,7 +50,7 @@ def ejecutar_modernizacion():
         try:
             response = bedrock.invoke_model(
                 body=body, 
-                modelId="anthropic.claude-3-5-sonnet-20241022-v2:0"
+                modelId="us.anthropic.claude-3-5-sonnet-20241022-v2:0"
             )
             
             resultado = json.loads(response.get('body').read())
