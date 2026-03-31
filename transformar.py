@@ -67,7 +67,7 @@ def ejecutar_modernizacion():
         })
 
         # ID del modelo estable para Claude 3.5 Sonnet v2
-        model_id = "anthropic.claude-3-5-sonnet-20241022-v2:0"
+        model_id = "us.anthropic.claude-3-5-sonnet-20241022-v2:0"
 
         try:
             print(f"📡 Enviando petición a Amazon Bedrock ({model_id})...")
