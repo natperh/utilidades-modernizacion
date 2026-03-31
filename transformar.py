@@ -3,19 +3,16 @@ import json
 import os
 import glob
 
-# 1. Configuración de Bedrock
-# Usamos el ID de la versión 2 (20241022-v2:0) que es la activa y no "Legacy"
+# 1. Configuración de Bedrock con Cohere
 bedrock = boto3.client(service_name='bedrock-runtime', region_name='us-east-1')
 
 def ejecutar_modernizacion():
-    # Buscamos la ruta donde AWS descargó el código Cobol (Origen Primario)
     ruta_cobol = os.environ.get('CODEBUILD_SRC_DIR')
     
     if not ruta_cobol:
         print("❌ Error: No se pudo determinar la ruta del código fuente.")
         return
 
-    # Buscamos cualquier archivo .cbl o .cob en esa carpeta
     archivos_encontrados = glob.glob(f"{ruta_cobol}/*.cbl") + glob.glob(f"{ruta_cobol}/*.cob")
     
     if not archivos_encontrados:
@@ -24,7 +21,7 @@ def ejecutar_modernizacion():
 
     for archivo_path in archivos_encontrados:
         nombre_base = os.path.basename(archivo_path)
-        print(f"🚀 Procesando: {nombre_base}...")
+        print(f"🚀 Procesando con Cohere: {nombre_base}...")
 
         try:
             with open(archivo_path, 'r', encoding='utf-8') as f:
@@ -33,66 +30,48 @@ def ejecutar_modernizacion():
             print(f"❌ Error al leer el archivo {nombre_base}: {str(e)}")
             continue
 
-        # El Prompt maestro para Bedrock
-        prompt_texto = f"""
-        Eres un arquitecto experto en modernización de Mainframe a AWS.
-        Analiza el siguiente código COBOL y genera:
-        1. Código Java 21 moderno usando Spring Boot.
-        2. Reglas de negocio detalladas extraídas de la lógica.
-        3. Un diagrama de flujo en formato Mermaid.js.
-        4. Pruebas unitarias con JUnit y un archivo .feature de Cucumber.
-        
-        IMPORTANTE: Devuelve todo en un único formato Markdown claro y bien estructurado.
+        prompt_texto = f"""Analiza este código COBOL y genera:
+1. Código Java 21 con Spring Boot.
+2. Reglas de negocio detalladas.
+3. Diagrama de flujo en Mermaid.js.
+4. Pruebas unitarias JUnit y Cucumber.
 
-        Código COBOL a transformar:
-        {codigo_cobol}
-        """
+Código COBOL:
+{codigo_cobol}"""
 
-        # Estructura de "body" compatible con Claude 3.5 Sonnet v2
-        # El contenido DEBE ser una lista con el tipo 'text'
+        # Formato específico para Cohere Command R
         body = json.dumps({
-            "anthropic_version": "bedrock-2023-05-31",
+            "message": prompt_texto,
             "max_tokens": 4096,
-            "messages": [
-                {
-                    "role": "user", 
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": prompt_texto
-                        }
-                    ]
-                }
-            ]
+            "temperature": 0.3,
+            "stream": False
         })
 
-        # ID del modelo estable para Claude 3.5 Sonnet v2
-        model_id = "anthropic.claude-3-sonnet-20240229-v1:0"
+        # El ID que ya probaste en tu Lambda
+        model_id = "cohere.command-r-v1:0"
 
         try:
-            print(f"📡 Enviando petición a Amazon Bedrock ({model_id})...")
+            print(f"📡 Enviando petición a Cohere ({model_id})...")
             response = bedrock.invoke_model(
                 body=body, 
                 modelId=model_id
             )
             
-            # Procesar la respuesta de AWS
             response_body = json.loads(response.get('body').read())
             
-            # En Claude 3.5, el texto viene dentro de content[0]['text']
-            texto_final = response_body['content'][0]['text']
+            # En Cohere, el texto viene en ['text']
+            texto_final = response_body.get('text', 'No se generó respuesta.')
 
-            # Guardamos el resultado en la misma carpeta del proyecto Cobol
             ruta_salida = os.path.join(ruta_cobol, f"resultado_{nombre_base}.md")
             with open(ruta_salida, "w", encoding='utf-8') as f_out:
                 f_out.write(texto_final)
             
-            print(f"✅ Transformación exitosa guardada en: resultado_{nombre_base}.md")
+            print(f"✅ ¡ÉXITO! Guardado en: resultado_{nombre_base}.md")
 
         except Exception as e:
-            print(f"❌ Error al procesar con la IA para {nombre_base}: {str(e)}")
+            print(f"❌ Error con Cohere para {nombre_base}: {str(e)}")
 
 if __name__ == "__main__":
-    print("--- Iniciando Script de Modernización Centralizado ---")
+    print("--- Iniciando Modernización con Cohere ---")
     ejecutar_modernizacion()
     print("--- Proceso Finalizado ---")
