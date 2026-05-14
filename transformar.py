@@ -3,6 +3,8 @@ import json
 import os
 import glob
 import re
+import traceback
+import botocore.exceptions
 
 # ============================================================
 # CONFIGURACIÓN BEDROCK + CLAUDE
@@ -25,50 +27,27 @@ bedrock = boto3.client(
 # ============================================================
 
 def extraer_seccion(texto, inicio, fin):
-    """
-    Extrae contenido entre etiquetas.
-    """
-
     try:
         patron = rf"{re.escape(inicio)}(.*?){re.escape(fin)}"
-
-        resultado = re.search(
-            patron,
-            texto,
-            re.DOTALL
-        )
-
+        resultado = re.search(patron, texto, re.DOTALL)
         return resultado.group(1).strip() if resultado else ""
-
     except Exception as e:
         print(f"❌ Error extrayendo sección {inicio}: {e}")
         return ""
 
 
 def limpiar_markdown(texto):
-    """
-    Limpia bloques markdown residuales.
-    """
-
     texto = re.sub(r"```[a-zA-Z]*\n?", "", texto)
     texto = texto.replace("```", "")
-
     return texto.strip()
 
 
 def guardar_archivo(ruta, contenido):
-    """
-    Guarda archivo asegurando directorios.
-    """
-
     try:
         os.makedirs(os.path.dirname(ruta), exist_ok=True)
-
         with open(ruta, "w", encoding="utf-8") as f:
             f.write(contenido)
-
         print(f"✅ Archivo generado: {ruta}")
-
     except Exception as e:
         print(f"❌ Error guardando {ruta}: {e}")
 
@@ -96,9 +75,7 @@ def invocar_claude(prompt_texto):
         modelId=MODEL_ID
     )
 
-    response_body = json.loads(
-        response.get("body").read()
-    )
+    response_body = json.loads(response["body"].read())
 
     return response_body["content"][0]["text"]
 
@@ -109,12 +86,7 @@ def invocar_claude(prompt_texto):
 
 def ejecutar_modernizacion():
 
-    ruta_actual = os.getcwd()
-
-    ruta_fuente = os.path.join(
-        ruta_actual,
-        "fuente_cobol"
-    )
+    ruta_fuente = os.path.join(os.getcwd(), "fuente_cobol")
 
     print(f"📂 Buscando COBOL en: {ruta_fuente}")
 
@@ -133,11 +105,8 @@ def ejecutar_modernizacion():
     # ========================================================
 
     main_java = "SumaProject/src/main/java/com/modernizacion"
-
     test_java = "SumaProject/src/test/java/com/modernizacion"
-
     features_dir = "SumaProject/src/test/resources/features"
-
     docs_dir = "SumaProject/docs"
 
     os.makedirs(main_java, exist_ok=True)
@@ -146,14 +115,12 @@ def ejecutar_modernizacion():
     os.makedirs(docs_dir, exist_ok=True)
 
     # ========================================================
-    # PROCESAMIENTO ARCHIVOS
+    # PROCESAMIENTO
     # ========================================================
 
     for archivo_path in archivos:
 
-        nombre_base = os.path.basename(
-            archivo_path
-        ).split(".")[0]
+        nombre_base = os.path.basename(archivo_path).split(".")[0]
 
         print("\n================================================")
         print(f"🚀 Procesando: {nombre_base}")
@@ -161,190 +128,88 @@ def ejecutar_modernizacion():
 
         try:
 
-            with open(
-                archivo_path,
-                "r",
-                encoding="utf-8",
-                errors="ignore"
-            ) as f:
-
+            with open(archivo_path, "r", encoding="utf-8", errors="ignore") as f:
                 codigo_cobol = f.read()
 
             # =================================================
-            # PROMPT CLAUDE
+            # PROMPT
             # =================================================
 
             prompt_texto = f"""
-Eres un Arquitecto de Software Senior experto en:
+Eres un Arquitecto de Software Senior.
 
-- COBOL Mainframe
-- Java 21
-- Spring Boot 3
-- Clean Architecture
-- Domain Driven Design
-- BPM
-- Modernización Legacy
-- JUnit 5
-- Cucumber
-- Diseño Empresarial
+Convierte COBOL a Java 21 con Clean Architecture.
 
-OBJETIVO:
-Modernizar este programa COBOL hacia Java 21 empresarial.
+OBLIGATORIO:
+[JAVA_START]...[JAVA_END]
+[JUNIT_START]...[JUNIT_END]
+[CUCUMBER_START]...[CUCUMBER_END]
+[MERMAID_START]...[MERMAID_END]
+[DOCS_START]...[DOCS_END]
+[POM_START]...[POM_END]
 
-REGLAS OBLIGATORIAS:
-- NO OMITAS NINGUNA SECCIÓN
-- TODAS LAS ETIQUETAS SON OBLIGATORIAS
-- NO USES TEXTO FUERA DE LAS ETIQUETAS
-- NO USES MARKDOWN EXTERNO
-- GENERA CÓDIGO COMPLETO
-- GENERA CÓDIGO COMPILABLE
-- GENERA CLEAN ARCHITECTURE
-- GENERA BUENAS PRÁCTICAS
-- GENERA NOMBRES EMPRESARIALES
-
-FORMATO OBLIGATORIO:
-
-[JAVA_START]
-(Java Spring Boot 3 + Java 21)
-[JAVA_END]
-
-[JUNIT_START]
-(Pruebas JUnit 5)
-[JUNIT_END]
-
-[CUCUMBER_START]
-(Feature file Gherkin)
-[CUCUMBER_END]
-
-[MERMAID_START]
-(Diagrama BPM Mermaid)
-[MERMAID_END]
-
-[DOCS_START]
-(Documentación funcional y técnica)
-[DOCS_END]
-
-[POM_START]
-(pom.xml Maven completo)
-[POM_END]
-
-COBOL DE ENTRADA:
+COBOL:
 {codigo_cobol}
 """
 
-            # =================================================
-            # LLAMADA CLAUDE
-            # =================================================
-
             print("📡 Invocando Claude...")
+
             try:
                 texto_ia = invocar_claude(prompt_texto)
                 print("✅ Respuesta recibida desde Bedrock")
 
+            except botocore.exceptions.ClientError as e:
+                print("❌ CLIENT ERROR BEDROCK")
+
+                print("CODE:", e.response["Error"]["Code"])
+                print("MESSAGE:", e.response["Error"]["Message"])
+
+                print(traceback.format_exc())
+                raise e
+
             except Exception as e:
-                print("❌ ERROR INVOCANDO BEDROCK")
-                print("Tipo:", type(e))
-                print("Mensaje:", str(e))
-
-            # 🔥 Detalle completo (lo más importante)
-            import traceback
-            print("TRACEBACK COMPLETO:")
-            print(traceback.format_exc())
-
-            raise
+                print("❌ ERROR GENERAL INVOCANDO BEDROCK")
+                print(traceback.format_exc())
+                raise e
 
             # =================================================
             # EXTRAER SECCIONES
             # =================================================
 
-            java_code = extraer_seccion(
-                texto_ia,
-                "[JAVA_START]",
-                "[JAVA_END]"
-            )
-
-            junit_code = extraer_seccion(
-                texto_ia,
-                "[JUNIT_START]",
-                "[JUNIT_END]"
-            )
-
-            cucumber_code = extraer_seccion(
-                texto_ia,
-                "[CUCUMBER_START]",
-                "[CUCUMBER_END]"
-            )
-
-            mermaid_code = extraer_seccion(
-                texto_ia,
-                "[MERMAID_START]",
-                "[MERMAID_END]"
-            )
-
-            docs_txt = extraer_seccion(
-                texto_ia,
-                "[DOCS_START]",
-                "[DOCS_END]"
-            )
-
-            pom_xml = extraer_seccion(
-                texto_ia,
-                "[POM_START]",
-                "[POM_END]"
-            )
+            java_code = extraer_seccion(texto_ia, "[JAVA_START]", "[JAVA_END]")
+            junit_code = extraer_seccion(texto_ia, "[JUNIT_START]", "[JUNIT_END]")
+            cucumber_code = extraer_seccion(texto_ia, "[CUCUMBER_START]", "[CUCUMBER_END]")
+            mermaid_code = extraer_seccion(texto_ia, "[MERMAID_START]", "[MERMAID_END]")
+            docs_txt = extraer_seccion(texto_ia, "[DOCS_START]", "[DOCS_END]")
+            pom_xml = extraer_seccion(texto_ia, "[POM_START]", "[POM_END]")
 
             # =================================================
-            # GUARDAR ARCHIVOS
+            # GUARDAR
             # =================================================
 
             if java_code:
-
-                guardar_archivo(
-                    f"{main_java}/{nombre_base}.java",
-                    limpiar_markdown(java_code)
-                )
+                guardar_archivo(f"{main_java}/{nombre_base}.java", limpiar_markdown(java_code))
 
             if junit_code:
-
-                guardar_archivo(
-                    f"{test_java}/{nombre_base}Test.java",
-                    limpiar_markdown(junit_code)
-                )
+                guardar_archivo(f"{test_java}/{nombre_base}Test.java", limpiar_markdown(junit_code))
 
             if cucumber_code:
-
-                guardar_archivo(
-                    f"{features_dir}/{nombre_base}.feature",
-                    limpiar_markdown(cucumber_code)
-                )
+                guardar_archivo(f"{features_dir}/{nombre_base}.feature", limpiar_markdown(cucumber_code))
 
             if mermaid_code:
-
-                guardar_archivo(
-                    f"{docs_dir}/{nombre_base}_diagrama.mmd",
-                    limpiar_markdown(mermaid_code)
-                )
+                guardar_archivo(f"{docs_dir}/{nombre_base}.mmd", limpiar_markdown(mermaid_code))
 
             if docs_txt:
-
-                guardar_archivo(
-                    f"{docs_dir}/{nombre_base}_documentacion.txt",
-                    docs_txt
-                )
+                guardar_archivo(f"{docs_dir}/{nombre_base}.txt", docs_txt)
 
             if pom_xml:
-
-                guardar_archivo(
-                    "SumaProject/pom.xml",
-                    limpiar_markdown(pom_xml)
-                )
+                guardar_archivo("SumaProject/pom.xml", limpiar_markdown(pom_xml))
 
             print(f"🎉 Modernización completada: {nombre_base}")
 
         except Exception as e:
-
             print(f"❌ Error procesando {nombre_base}")
-            print(str(e))
+            print(traceback.format_exc())
 
 
 # ============================================================
@@ -355,7 +220,7 @@ if __name__ == "__main__":
 
     print("================================================")
     print("🏗️ ARQUITECTO MODERNIZADOR COBOL → JAVA")
-    print("⚡ Amazon Bedrock + Claude 3.5 Sonnet")
+    print("⚡ Amazon Bedrock + Claude")
     print("================================================")
 
     ejecutar_modernizacion()
