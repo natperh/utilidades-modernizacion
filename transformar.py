@@ -12,7 +12,7 @@ REGION = os.getenv("AWS_DEFAULT_REGION", "us-east-1")
 
 MODEL_ID = os.getenv(
     "BEDROCK_MODEL_ID",
-    "anthropic.claude-3-sonnet-20240229-v1:0"
+    "anthropic.claude-3-haiku-20240307-v1:0"
 )
 
 bedrock = boto3.client(
