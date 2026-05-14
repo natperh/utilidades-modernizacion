@@ -74,6 +74,7 @@ def invocar_claude(prompt_texto):
         body=body,
         modelId=MODEL_ID
     )
+    print("MODEL_ID REAL:", MODEL_ID)
 
     response_body = json.loads(response["body"].read())
 
