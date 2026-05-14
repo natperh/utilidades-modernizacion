@@ -236,11 +236,22 @@ COBOL DE ENTRADA:
             # LLAMADA CLAUDE
             # =================================================
 
-            print(f"📡 Invocando Claude 3.5 Sonnet...")
+            print("📡 Invocando Claude...")
+            try:
+                texto_ia = invocar_claude(prompt_texto)
+                print("✅ Respuesta recibida desde Bedrock")
 
-            texto_ia = invocar_claude(prompt_texto)
+            except Exception as e:
+                print("❌ ERROR INVOCANDO BEDROCK")
+                print("Tipo:", type(e))
+                print("Mensaje:", str(e))
 
-            print("✅ Respuesta recibida desde Bedrock")
+            # 🔥 Detalle completo (lo más importante)
+            import traceback
+            print("TRACEBACK COMPLETO:")
+            print(traceback.format_exc())
+
+            raise
 
             # =================================================
             # EXTRAER SECCIONES
