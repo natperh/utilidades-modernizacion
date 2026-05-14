@@ -4,145 +4,351 @@ import os
 import glob
 import re
 
-# 1. Configuración de Bedrock
-bedrock = boto3.client(service_name='bedrock-runtime', region_name='us-east-1')
+# ============================================================
+# CONFIGURACIÓN BEDROCK + CLAUDE
+# ============================================================
+
+REGION = os.getenv("AWS_DEFAULT_REGION", "us-east-1")
+
+MODEL_ID = os.getenv(
+    "BEDROCK_MODEL_ID",
+    "anthropic.claude-3-5-sonnet-20241022-v2:0"
+)
+
+bedrock = boto3.client(
+    service_name="bedrock-runtime",
+    region_name=REGION
+)
+
+# ============================================================
+# FUNCIONES AUXILIARES
+# ============================================================
 
 def extraer_seccion(texto, inicio, fin):
-    """Extrae el contenido entre etiquetas personalizadas [INICIO] y [FIN]"""
+    """
+    Extrae contenido entre etiquetas.
+    """
+
     try:
         patron = rf"{re.escape(inicio)}(.*?){re.escape(fin)}"
-        resultado = re.search(patron, texto, re.DOTALL)
+
+        resultado = re.search(
+            patron,
+            texto,
+            re.DOTALL
+        )
+
         return resultado.group(1).strip() if resultado else ""
+
     except Exception as e:
-        print(f"Error extrayendo sección {inicio}: {e}")
+        print(f"❌ Error extrayendo sección {inicio}: {e}")
         return ""
 
+
 def limpiar_markdown(texto):
-    """Elimina marcas de bloques de código Markdown residuales"""
-    return re.sub(r"```[a-z]*\n?", "", texto).replace("```", "").strip()
+    """
+    Limpia bloques markdown residuales.
+    """
+
+    texto = re.sub(r"```[a-zA-Z]*\n?", "", texto)
+    texto = texto.replace("```", "")
+
+    return texto.strip()
+
+
+def guardar_archivo(ruta, contenido):
+    """
+    Guarda archivo asegurando directorios.
+    """
+
+    try:
+        os.makedirs(os.path.dirname(ruta), exist_ok=True)
+
+        with open(ruta, "w", encoding="utf-8") as f:
+            f.write(contenido)
+
+        print(f"✅ Archivo generado: {ruta}")
+
+    except Exception as e:
+        print(f"❌ Error guardando {ruta}: {e}")
+
+
+# ============================================================
+# INVOCACIÓN CLAUDE
+# ============================================================
+
+def invocar_claude(prompt_texto):
+
+    body = json.dumps({
+        "anthropic_version": "bedrock-2023-05-31",
+        "max_tokens": 8192,
+        "temperature": 0.2,
+        "messages": [
+            {
+                "role": "user",
+                "content": prompt_texto
+            }
+        ]
+    })
+
+    response = bedrock.invoke_model(
+        body=body,
+        modelId=MODEL_ID
+    )
+
+    response_body = json.loads(
+        response.get("body").read()
+    )
+
+    return response_body["content"][0]["text"]
+
+
+# ============================================================
+# MODERNIZACIÓN COBOL
+# ============================================================
 
 def ejecutar_modernizacion():
-    # Definir rutas: Buscamos en 'fuente_cobol' clonada por el Buildspec
+
     ruta_actual = os.getcwd()
-    ruta_fuente = os.path.join(ruta_actual, "fuente_cobol")
-    
-    archivos = glob.glob(f"{ruta_fuente}/*.cbl") + glob.glob(f"{ruta_fuente}/*.cob")
-    
+
+    ruta_fuente = os.path.join(
+        ruta_actual,
+        "fuente_cobol"
+    )
+
+    print(f"📂 Buscando COBOL en: {ruta_fuente}")
+
+    archivos = (
+        glob.glob(f"{ruta_fuente}/*.cbl") +
+        glob.glob(f"{ruta_fuente}/*.cob") +
+        glob.glob(f"{ruta_fuente}/*.cpy")
+    )
+
     if not archivos:
-        print(f"⚠️ No se encontraron archivos Cobol en {ruta_fuente}")
+        print("⚠️ No se encontraron archivos COBOL.")
         return
 
+    # ========================================================
+    # ESTRUCTURA MAVEN
+    # ========================================================
+
+    main_java = "SumaProject/src/main/java/com/modernizacion"
+
+    test_java = "SumaProject/src/test/java/com/modernizacion"
+
+    features_dir = "SumaProject/src/test/resources/features"
+
+    docs_dir = "SumaProject/docs"
+
+    os.makedirs(main_java, exist_ok=True)
+    os.makedirs(test_java, exist_ok=True)
+    os.makedirs(features_dir, exist_ok=True)
+    os.makedirs(docs_dir, exist_ok=True)
+
+    # ========================================================
+    # PROCESAMIENTO ARCHIVOS
+    # ========================================================
+
     for archivo_path in archivos:
-        nombre_base = os.path.basename(archivo_path).split('.')[0]
-        print(f"🚀 Procesando archivo: {nombre_base}...")
 
-        with open(archivo_path, 'r', encoding='utf-8') as f:
-            codigo_cobol = f.read()
+        nombre_base = os.path.basename(
+            archivo_path
+        ).split(".")[0]
 
-        # PROMPT ESTRUCTURADO: Foco en BPM y Reglas de Negocio COBOL
-        prompt_texto = f"""Eres un Arquitecto de Software y Analista de Procesos Senior. 
-Tu tarea es modernizar este COBOL a Java 21, pero la documentación y el diagrama deben ser de nivel negocio.
+        print("\n================================================")
+        print(f"🚀 Procesando: {nombre_base}")
+        print("================================================")
 
-INSTRUCCIONES DE FORMATO (OBLIGATORIO):
-No escribas prosa fuera de las etiquetas. Usa exactamente estos delimitadores:
+        try:
+
+            with open(
+                archivo_path,
+                "r",
+                encoding="utf-8",
+                errors="ignore"
+            ) as f:
+
+                codigo_cobol = f.read()
+
+            # =================================================
+            # PROMPT CLAUDE
+            # =================================================
+
+            prompt_texto = f"""
+Eres un Arquitecto de Software Senior experto en:
+
+- COBOL Mainframe
+- Java 21
+- Spring Boot 3
+- Clean Architecture
+- Domain Driven Design
+- BPM
+- Modernización Legacy
+- JUnit 5
+- Cucumber
+- Diseño Empresarial
+
+OBJETIVO:
+Modernizar este programa COBOL hacia Java 21 empresarial.
+
+REGLAS OBLIGATORIAS:
+- NO OMITAS NINGUNA SECCIÓN
+- TODAS LAS ETIQUETAS SON OBLIGATORIAS
+- NO USES TEXTO FUERA DE LAS ETIQUETAS
+- NO USES MARKDOWN EXTERNO
+- GENERA CÓDIGO COMPLETO
+- GENERA CÓDIGO COMPILABLE
+- GENERA CLEAN ARCHITECTURE
+- GENERA BUENAS PRÁCTICAS
+- GENERA NOMBRES EMPRESARIALES
+
+FORMATO OBLIGATORIO:
 
 [JAVA_START]
-(Código Java Spring Boot 3 con Clean Architecture)
+(Java Spring Boot 3 + Java 21)
 [JAVA_END]
 
 [JUNIT_START]
-(Pruebas unitarias JUnit 5 enfocadas en lógica de negocio)
+(Pruebas JUnit 5)
 [JUNIT_END]
 
 [CUCUMBER_START]
-(Archivo .feature con escenarios Gherkin que describan el comportamiento esperado)
+(Feature file Gherkin)
 [CUCUMBER_END]
 
 [MERMAID_START]
-graph TD
-  subgraph "Business Process Model (BPM)"
-    Start((Inicio)) --> Input[Lectura de Datos COBOL]
-    Input --> Logic{{Validación de Reglas}}
-    Logic -- Fallo --> Error((Fin con Error))
-    Logic -- Éxito --> Calc[Procesamiento de Reglas de Negocio]
-    Calc --> Output[Escritura/Salida de Resultados]
-    Output --> End((Fin Proceso))
-  end
-  %% Continúa el flujo BPM basado en el código COBOL
+(Diagrama BPM Mermaid)
 [MERMAID_END]
 
 [DOCS_START]
-ANÁLISIS TÉCNICO-FUNCIONAL DEL PROGRAMA COBOL:
-1. DESCRIPCIÓN GENERAL: (Qué hace el programa originalmente en el Mainframe)
-2. REGLAS DE NEGOCIO: (Listado detallado y numerado de las validaciones y cálculos lógicos del COBOL)
-3. VARIABLES CRÍTICAS: (Mapeo de las variables más importantes del COBOL y su función)
+(Documentación funcional y técnica)
 [DOCS_END]
 
-Código COBOL de entrada:
+[POM_START]
+(pom.xml Maven completo)
+[POM_END]
+
+COBOL DE ENTRADA:
 {codigo_cobol}
 """
 
-        body = json.dumps({
-            "message": prompt_texto,
-            "max_tokens": 4096,
-            "temperature": 0.2
-        })
+            # =================================================
+            # LLAMADA CLAUDE
+            # =================================================
 
-        model_id = "cohere.command-r-v1:0"
+            print(f"📡 Invocando Claude 3.5 Sonnet...")
 
-        try:
-            print(f"📡 Invocando Bedrock para {nombre_base}...")
-            response = bedrock.invoke_model(body=body, modelId=model_id)
-            response_body = json.loads(response.get('body').read())
-            texto_ia = response_body.get('text', '')
+            texto_ia = invocar_claude(prompt_texto)
 
-            # --- ESTRUCTURACIÓN DE CARPETAS (Estándar Maven) ---
-            main_java = "SumaProject/src/main/java/com/modernizacion"
-            test_java = "SumaProject/src/test/java/com/modernizacion"
-            features_dir = "SumaProject/src/test/resources/features"
-            docs_dir = "SumaProject/docs"
+            print("✅ Respuesta recibida desde Bedrock")
 
-            for folder in [main_java, test_java, features_dir, docs_dir]:
-                os.makedirs(folder, exist_ok=True)
+            # =================================================
+            # EXTRAER SECCIONES
+            # =================================================
 
-            # --- EXTRACCIÓN Y GUARDADO DE COMPONENTES ---
-            
-            # 1. Código Fuente Java
-            java_code = extraer_seccion(texto_ia, "[JAVA_START]", "[JAVA_END]")
+            java_code = extraer_seccion(
+                texto_ia,
+                "[JAVA_START]",
+                "[JAVA_END]"
+            )
+
+            junit_code = extraer_seccion(
+                texto_ia,
+                "[JUNIT_START]",
+                "[JUNIT_END]"
+            )
+
+            cucumber_code = extraer_seccion(
+                texto_ia,
+                "[CUCUMBER_START]",
+                "[CUCUMBER_END]"
+            )
+
+            mermaid_code = extraer_seccion(
+                texto_ia,
+                "[MERMAID_START]",
+                "[MERMAID_END]"
+            )
+
+            docs_txt = extraer_seccion(
+                texto_ia,
+                "[DOCS_START]",
+                "[DOCS_END]"
+            )
+
+            pom_xml = extraer_seccion(
+                texto_ia,
+                "[POM_START]",
+                "[POM_END]"
+            )
+
+            # =================================================
+            # GUARDAR ARCHIVOS
+            # =================================================
+
             if java_code:
-                with open(f"{main_java}/{nombre_base}.java", "w", encoding='utf-8') as f:
-                    f.write(limpiar_markdown(java_code))
 
-            # 2. Pruebas JUnit
-            junit_code = extraer_seccion(texto_ia, "[JUNIT_START]", "[JUNIT_END]")
+                guardar_archivo(
+                    f"{main_java}/{nombre_base}.java",
+                    limpiar_markdown(java_code)
+                )
+
             if junit_code:
-                with open(f"{test_java}/{nombre_base}Test.java", "w", encoding='utf-8') as f:
-                    f.write(limpiar_markdown(junit_code))
 
-            # 3. Escenarios Cucumber (Gherkin)
-            cucumber_code = extraer_seccion(texto_ia, "[CUCUMBER_START]", "[CUCUMBER_END]")
+                guardar_archivo(
+                    f"{test_java}/{nombre_base}Test.java",
+                    limpiar_markdown(junit_code)
+                )
+
             if cucumber_code:
-                with open(f"{features_dir}/{nombre_base}.feature", "w", encoding='utf-8') as f:
-                    f.write(limpiar_markdown(cucumber_code))
 
-            # 4. Diagrama BPM (Mermaid)
-            mermaid_code = extraer_seccion(texto_ia, "[MERMAID_START]", "[MERMAID_END]")
+                guardar_archivo(
+                    f"{features_dir}/{nombre_base}.feature",
+                    limpiar_markdown(cucumber_code)
+                )
+
             if mermaid_code:
-                with open(f"{docs_dir}/diagrama.mmd", "w", encoding='utf-8') as f:
-                    f.write(limpiar_markdown(mermaid_code))
 
-            # 5. Documentación de Reglas de Negocio
-            docs_txt = extraer_seccion(texto_ia, "[DOCS_START]", "[DOCS_END]")
+                guardar_archivo(
+                    f"{docs_dir}/{nombre_base}_diagrama.mmd",
+                    limpiar_markdown(mermaid_code)
+                )
+
             if docs_txt:
-                with open(f"{docs_dir}/documentacion.txt", "w", encoding='utf-8') as f:
-                    f.write(docs_txt)
 
-            print(f"✅ Proyecto {nombre_base} finalizado exitosamente.")
+                guardar_archivo(
+                    f"{docs_dir}/{nombre_base}_documentacion.txt",
+                    docs_txt
+                )
+
+            if pom_xml:
+
+                guardar_archivo(
+                    "SumaProject/pom.xml",
+                    limpiar_markdown(pom_xml)
+                )
+
+            print(f"🎉 Modernización completada: {nombre_base}")
 
         except Exception as e:
-            print(f"❌ Error procesando {nombre_base}: {str(e)}")
+
+            print(f"❌ Error procesando {nombre_base}")
+            print(str(e))
+
+
+# ============================================================
+# MAIN
+# ============================================================
 
 if __name__ == "__main__":
-    print("--- 🏗️ Iniciando Arquitecto de Modernización (BPM & Clean Code) ---")
+
+    print("================================================")
+    print("🏗️ ARQUITECTO MODERNIZADOR COBOL → JAVA")
+    print("⚡ Amazon Bedrock + Claude 3.5 Sonnet")
+    print("================================================")
+
     ejecutar_modernizacion()
-    print("--- Proceso Finalizado ---")
+
+    print("\n================================================")
+    print("✅ PROCESO FINALIZADO")
+    print("================================================")
