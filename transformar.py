@@ -8,7 +8,7 @@ import re
 # CONFIGURACIÓN BEDROCK + CLAUDE
 # ============================================================
 
-REGION = os.getenv("AWS_DEFAULT_REGION", "us-east-1")
+REGION = os.getenv("AWS_DEFAULT_REGION", "us-east-2")
 
 MODEL_ID = os.getenv(
     "BEDROCK_MODEL_ID",
